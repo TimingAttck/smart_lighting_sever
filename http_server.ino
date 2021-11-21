@@ -24,6 +24,15 @@ char pass[] = CONF_SECRET_PASS;
 //                                          //
 /********************************************/
 
+enum ACTION {
+  COOKING,
+  READING,
+  WORKOUT,
+  SCREENTIME,
+  CODING,
+  OFFICE_WORK,
+  EATING
+}
 
 // ACTIONHelper class for setting the action of the user
 class ACTIONHelper {
