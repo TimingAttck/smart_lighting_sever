@@ -24,6 +24,15 @@ char pass[] = CONF_SECRET_PASS;
 //                                          //
 /********************************************/
 
+enum ACTION {
+  COOKING,
+  READING,
+  WORKOUT,
+  SCREENTIME,
+  CODING,
+  OFFICE_WORK,
+  EATING
+}
 
 // ACTIONHelper class for setting the action of the user
 class ACTIONHelper {
@@ -250,7 +259,7 @@ void HTTPServer::serverLoop() {
           // TODO: use the library to get the light intensity
           httpHelper->setJSONResponseHeaders();
           int lightIntensity = actionHelper->getLightIntensity();
-          httpHelper->writeBody();
+          httpHelper->writeBody("{ 'status': 'success' }");
           httpHelper->endHTTPResponse();
           break;
 
@@ -261,7 +270,7 @@ void HTTPServer::serverLoop() {
           // TODO: use the library to get the current action and duration
           httpHelper->setJSONResponseHeaders();
           ACTION currentAction = actionHelper->getAction();
-          httpHelper->writeBody();
+          httpHelper->writeBody("{ 'status': 'success' }");
           httpHelper->endHTTPResponse();
           break;
 
@@ -272,7 +281,7 @@ void HTTPServer::serverLoop() {
           // TODO: use the library to get the current action and duration
           httpHelper->setJSONResponseHeaders();
           ACTION currentAction = actionHelper->setActionAndDuration();
-          httpHelper->writeBody();
+          httpHelper->writeBody("{ 'status': 'success' }");
           httpHelper->endHTTPResponse();
           break;
 
