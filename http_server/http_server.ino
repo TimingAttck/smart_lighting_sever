@@ -10,7 +10,7 @@
 /********************************************/
 
 
-const int IP_ADDR = CONF_IP_ADDR;
+const char IP_ADDR[] = CONF_IP_ADDR;
 const int PORT = CONF_PORT;
 const int keyIndex = 0;
 
@@ -32,19 +32,41 @@ enum ACTION {
   CODING,
   OFFICE_WORK,
   EATING
-}
+};
+
+// LEDHelper class that wrapps the libray written by Houda and Meryem
+class LEDHelper {
+  public:
+    void setLightIntensity() {
+      // TODO: call the light library libray written by Houda and Meryem
+      return;
+    }
+};
+
+
+// SENSORHelper class that wraps the libray written by Houda and Meryem
+class SENSORHelper {
+  public:
+    int getLightIntensity() {
+      // TODO: call the light library libray written by Houda and Meryem
+      return 0;
+    }
+};
+
 
 // ACTIONHelper class for setting the action of the user
 class ACTIONHelper {
 
   private:
-    ACTION currentAction;
+    ACTION currentAction = ACTION::READING;
+    SENSORHelper* sensorHelper;
+    LEDHelper* ledHelper;
 
   public:
 
     ACTIONHelper() {
-      SENSORHelper* sensorHelper = new SENSORHelper();
-      LEDHelper* ledHelper = new LEDHelper();
+      this->sensorHelper = new SENSORHelper();
+      this->ledHelper = new LEDHelper();
     }
 
     void setActionAndDuration(ACTION action, int duration) {
@@ -66,41 +88,14 @@ class ACTIONHelper {
       return sensorHelper->getLightIntensity();
     }
 
-}
-
-
-// LEDHelper class that wrapps the libray written by Houda and Meryem
-class LEDHelper {
-
-  public:
-
-    void setLightIntensity() {
-      // TODO: call the light library libray written by Houda and Meryem
-      return;
-    }
-
-}
-
-
-// SENSORHelper class that wraps the libray written by Houda and Meryem
-class SENSORHelper {
-
-  public:
-
-    int getLightIntensity() {
-      // TODO: call the light library libray written by Houda and Meryem
-      return 0;
-    }
-
-}
-
+};
 
 // HTTPHelper class to help write HTTP responses
 class HTTPHelper {
 
   public:
 
-    void setJSONResponseHeaders() {
+    void setJSONResponseHeaders(WiFiClient client) {
       // Set the HTTP response headers
       // such that the client knows the response
       // is of type json
@@ -109,15 +104,15 @@ class HTTPHelper {
       client.println();
     }
 
-    void endHTTPResponse() {
+    void endHTTPResponse(WiFiClient client) {
       client.println();
     }
 
-    void setBody(char* bodyString) {
+    void writeBody(WiFiClient client, String bodyString) {
       client.print(bodyString);
     }
 
-}
+};
 
 
 int status = WL_IDLE_STATUS;
@@ -135,18 +130,22 @@ WiFiServer server(PORT);
 // on the Arduino and also reading requests sent from the clients
 // and finally responding to those requests
 class HTTPServer {
+  
+  private:
+    HTTPHelper* httpHelper;
+    ACTIONHelper* actionHelper;
 
   public:
 
-    ACTIONHelper() {
-      HTTPHelper* httpHelper = new HTTPHelper();
-      ACTIONHelper* actionHelper = new ACTIONHelper();
+    HTTPServer() {
+      this->httpHelper = new HTTPHelper();
+      this->actionHelper = new ACTIONHelper();
     }
 
     void setUp();
     void serverLoop();
 
-}
+};
 
 
 void HTTPServer::setUp() {
@@ -177,7 +176,7 @@ void HTTPServer::setUp() {
   }
 
   // Set the IP address of the AP
-  WiFi.config(IPAddress(IP_ADDR))
+  WiFi.config(IPAddress(IP_ADDR[0],IP_ADDR[1],IP_ADDR[2],IP_ADDR[3]));
 
   Serial.print("Creating access point named: ");
   Serial.println(ssid);
@@ -194,14 +193,13 @@ void HTTPServer::setUp() {
   // wait 10 seconds for connection
   delay(10000);
   server.begin();
-  printWiFiStatus();
 
   // print wifi stats info
   Serial.print("SSID: ");
   Serial.println(WiFi.SSID());
 
   Serial.print("Password: ");
-  Serial.println(SECRET_PASS);
+  Serial.println(pass);
 
   IPAddress ip = WiFi.localIP();
   Serial.print("IP Address: ");
@@ -257,10 +255,10 @@ void HTTPServer::serverLoop() {
         if (currentLine.endsWith("GET /intensity")) {
 
           // TODO: use the library to get the light intensity
-          httpHelper->setJSONResponseHeaders();
+          httpHelper->setJSONResponseHeaders(client);
           int lightIntensity = actionHelper->getLightIntensity();
-          httpHelper->writeBody("{ 'status': 'success' }");
-          httpHelper->endHTTPResponse();
+          httpHelper->writeBody(client,"{ 'status': 'success' }");
+          httpHelper->endHTTPResponse(client);
           break;
 
         }
@@ -268,10 +266,10 @@ void HTTPServer::serverLoop() {
         if (currentLine.endsWith("GET /action")) {
 
           // TODO: use the library to get the current action and duration
-          httpHelper->setJSONResponseHeaders();
-          ACTION currentAction = actionHelper->getAction();
-          httpHelper->writeBody("{ 'status': 'success' }");
-          httpHelper->endHTTPResponse();
+          httpHelper->setJSONResponseHeaders(client);
+          ACTION currentAction = actionHelper->getCurrentAction();
+          httpHelper->writeBody(client,"{ 'status': 'success' }");
+          httpHelper->endHTTPResponse(client);
           break;
 
         }
@@ -279,10 +277,10 @@ void HTTPServer::serverLoop() {
         if (currentLine.endsWith("POST /action")) {
 
           // TODO: use the library to get the current action and duration
-          httpHelper->setJSONResponseHeaders();
-          ACTION currentAction = actionHelper->setActionAndDuration();
-          httpHelper->writeBody("{ 'status': 'success' }");
-          httpHelper->endHTTPResponse();
+          httpHelper->setJSONResponseHeaders(client);
+          actionHelper->setActionAndDuration(ACTION::READING, 20);
+          httpHelper->writeBody(client,"{ 'status': 'success' }");
+          httpHelper->endHTTPResponse(client);
           break;
 
         }
@@ -296,4 +294,14 @@ void HTTPServer::serverLoop() {
     Serial.println("client disconnected");
 
   }
+}
+
+HTTPServer* httpServer = new HTTPServer();
+
+void setup() {
+  httpServer->setUp();
+}
+
+void loop() {
+  httpServer->serverLoop();
 }
