@@ -82,7 +82,7 @@ Nevertheless, you may find below a list of the web server endpoints that are ava
     Success Response:
     {
         "status": "success",
-        "action": "Cooking"
+        "action": "COOKING"
     }
 
     Error Response:
