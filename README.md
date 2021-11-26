@@ -36,7 +36,7 @@ Nevertheless, you may find below a list of the web server endpoints that are ava
     Example Post Body:
     {
         "action": "EATING",
-        "durationInMinutes": "30",
+        "durationInMinutes": "30"
     }
 
     Success Response:
@@ -82,7 +82,7 @@ Nevertheless, you may find below a list of the web server endpoints that are ava
     Success Response:
     {
         "status": "success",
-        "action": "Cooking",
+        "action": "Cooking"
     }
 
     Error Response:
