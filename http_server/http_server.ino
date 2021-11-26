@@ -337,7 +337,20 @@ void HTTPServer::serverLoop() {
     }
 
 
+    /********************************************/
+    //                                          //
+    //             Server endpoints             //
+    //                                          //
+    /********************************************/
+
+
     if (endpoint.startsWith("GET /intensity")) {
+
+      /**
+       *
+       * Server endpoint: GET /intensity
+       *
+       **/
 
       httpHelper->setJSONResponseHeaders(client);
       int lightIntensity = actionHelper->getLightIntensity();
@@ -353,6 +366,12 @@ void HTTPServer::serverLoop() {
       httpHelper->endHTTPResponse(client);
       
     } else if (endpoint.startsWith("GET /action")) {
+
+      /**
+       *
+       * Server endpoint: GET /action
+       *
+       **/
 
       DynamicJsonDocument requestBody(1024);
       deserializeJson(requestBody, jsonBody);
@@ -372,6 +391,12 @@ void HTTPServer::serverLoop() {
       
     } else if (endpoint.startsWith("POST /action")) {
 
+      /**
+       *
+       * Server endpoint: POST /action
+       *
+       **/
+
       DynamicJsonDocument requestBody(100);
       deserializeJson(requestBody, jsonBody);
 
@@ -389,6 +414,12 @@ void HTTPServer::serverLoop() {
       httpHelper->endHTTPResponse(client);
       
     } else {
+
+      /**
+       *
+       * Server endpoint: any other
+       *
+       **/
 
       httpHelper->setJSONResponseHeaders(client);
 
