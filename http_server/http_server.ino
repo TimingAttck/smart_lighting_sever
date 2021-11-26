@@ -10,9 +10,9 @@
 /********************************************/
 
 
-#define CONF_SECRET_SSID "SMART_AND_CONNECT_LIGHTING_AP"
+#define CONF_SECRET_SSID "SMART_AND_CONNECTED_LIGHTING_AP"
 #define CONF_SECRET_PASS "[f/%ua/8aMG8S<6e"
-#define CONF_IP_ADDR "10.10.10.1"
+#define CONF_IP_ADDR {10,10,10,10}
 #define CONF_PORT 80
 
 const char IP_ADDR[] = CONF_IP_ADDR;
@@ -81,6 +81,7 @@ ACTION stringToAction(String action) {
 //              Helper Classes              //
 //                                          //
 /********************************************/
+
 
 // LEDHelper class that wrapps the libray written by Houda and Meryem
 class LEDHelper {
