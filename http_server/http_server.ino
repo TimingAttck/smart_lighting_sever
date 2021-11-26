@@ -1,6 +1,6 @@
 #include <SPI.h>
 #include <WiFiNINA.h>
-#include "server_config.h"
+#include <ArduinoJson.h>
 
 
 /********************************************/
@@ -9,6 +9,11 @@
 //                                          //
 /********************************************/
 
+
+#define CONF_SECRET_SSID "SMART_AND_CONNECT_LIGHTING_AP"
+#define CONF_SECRET_PASS "[f/%ua/8aMG8S<6e"
+#define CONF_IP_ADDR "10.10.10.1"
+#define CONF_PORT 80
 
 const char IP_ADDR[] = CONF_IP_ADDR;
 const int PORT = CONF_PORT;
@@ -20,9 +25,10 @@ char pass[] = CONF_SECRET_PASS;
 
 /********************************************/
 //                                          //
-//             Helper classes               //
+//            User Action Defs              //
 //                                          //
 /********************************************/
+
 
 enum ACTION {
   COOKING,
@@ -31,8 +37,50 @@ enum ACTION {
   SCREENTIME,
   CODING,
   OFFICE_WORK,
-  EATING
+  EATING,
+  NONE
 };
+
+String actionToString(ACTION action) {
+    switch (action) {
+        case ACTION::COOKING: return "COOKING";
+        case ACTION::READING: return "READING";
+        case ACTION::WORKOUT: return "WORKOUT";
+        case ACTION::SCREENTIME: return "SCREENTIME";
+        case ACTION::CODING: return "CODING";
+        case ACTION::OFFICE_WORK: return "OFFICE_WORK";
+        case ACTION::EATING: return "EATING";
+        default: return "NONE";
+    }
+};
+
+ACTION stringToAction(String action) {
+   if (action == "COOKING")
+      return ACTION::COOKING;
+   else if (action == "READING")
+      return ACTION::READING;
+   else if (action == "WORKOUT")
+      return ACTION::WORKOUT;
+   else if (action == "SCREENTIME")
+      return ACTION::SCREENTIME;
+   else if (action == "CODING")
+      return ACTION::CODING;
+   else if (action == "OFFICE_WORK")
+      return ACTION::OFFICE_WORK;
+   else if (action == "OFFICE_WORK")
+      return ACTION::OFFICE_WORK;
+   else if (action == "EATING")
+      return ACTION::EATING;
+   else 
+      return ACTION::NONE;
+};
+
+
+/********************************************/
+//                                          //
+//              Helper Classes              //
+//                                          //
+/********************************************/
 
 // LEDHelper class that wrapps the libray written by Houda and Meryem
 class LEDHelper {
@@ -58,30 +106,53 @@ class SENSORHelper {
 class ACTIONHelper {
 
   private:
-    ACTION currentAction = ACTION::READING;
     SENSORHelper* sensorHelper;
     LEDHelper* ledHelper;
+    unsigned long previousMillis = 0;
+    long timeOut = 0;
 
   public:
-
+  
+    ACTION currentAction;
+    
     ACTIONHelper() {
+      this->currentAction = ACTION::NONE;
       this->sensorHelper = new SENSORHelper();
       this->ledHelper = new LEDHelper();
     }
 
-    void setActionAndDuration(ACTION action, int duration) {
+    void setActionAndDuration(ACTION action, int durationInMinutes) {
 
-      currentAction = action;
+      this->currentAction = action;
 
-      // TODO: use the library libray written by Houda and Meryem
-      // to set the light intensity
+      // TODO: use the optimal lighting to get or set the 
+      // lighting according to the action and the sensor value
 
-      // TODO: Reset the action after the defined duration
+      long clampedDurationInMinutes = constrain(durationInMinutes, 1, 1440);
 
+      // Set timeout for the action to be reset to NONE
+      long timeoutInMillis = clampedDurationInMinutes*60000;
+      this->timeOut = timeoutInMillis;
+      
+    }
+    
+    void checkActionTimeout() {
+
+      unsigned long currentMillis = millis();
+      
+      // Reset action if timeout has passed
+      if (this->timeOut != 0) {
+        if (currentMillis - this->previousMillis > this->timeOut) {
+          this->previousMillis = currentMillis;  
+          this->currentAction = ACTION::NONE;
+          this->timeOut = 0;
+        }
+      }
+      
     }
 
     ACTION getCurrentAction() {
-      return currentAction;
+      return this->currentAction;
     }
 
     int getLightIntensity() {
@@ -89,6 +160,7 @@ class ACTIONHelper {
     }
 
 };
+
 
 // HTTPHelper class to help write HTTP responses
 class HTTPHelper {
@@ -131,9 +203,11 @@ WiFiServer server(PORT);
 // and finally responding to those requests
 class HTTPServer {
   
+  public:
+    ACTIONHelper* actionHelper;
+  
   private:
     HTTPHelper* httpHelper;
-    ACTIONHelper* actionHelper;
 
   public:
 
@@ -149,9 +223,6 @@ class HTTPServer {
 
 
 void HTTPServer::setUp() {
-
-  // base code author: https://github.com/arduino-libraries/WiFiNINA
-  // base code adapted for our use case
 
   // Initialize serial and wait for port to open:
   Serial.begin(9600);
@@ -209,9 +280,6 @@ void HTTPServer::setUp() {
 
 void HTTPServer::serverLoop() {
 
-  // base code author: https://github.com/arduino-libraries/WiFiNINA
-  // base code adapted for our use case
-
   if (status != WiFi.status()) {
     status = WiFi.status();
     if (status == WL_AP_CONNECTED) {
@@ -228,65 +296,110 @@ void HTTPServer::serverLoop() {
 
     // make a String to hold incoming data from the client
     String currentLine = "";
+    String endpoint = "";
+    String jsonBody = "";
+    int lineCount = 0;
+    boolean reachedBody = false;
 
+    // Read the incoming data
     while (client.connected()) {
 
       // Read the incoming HTTP request
       if (client.available()) {
 
         char c = client.read();
-
         Serial.write(c);
 
         if (c == '\n') {
-
-          // if the current line is blank, you got two newline characters in a row.
-          // that's the end of the client HTTP request, so send a response:
-          if (currentLine.length() == 0) {
-
-          } else {
+          if (reachedBody != true) {
+            if (lineCount == 0) {
+              if (currentLine.indexOf("GET") >= 0 || currentLine.indexOf("POST") >= 0 ) {
+                endpoint = currentLine;
+              }
+            }
+            lineCount = lineCount+1;
+            if (currentLine == "") {
+              reachedBody = true;
+            }
             currentLine = "";
           }
-
         } else if (c != '\r') {
-          currentLine += c;
+          if (reachedBody) {
+            jsonBody += c;
+          } else {
+            currentLine += c;
+          }
         }
 
-        if (currentLine.endsWith("GET /intensity")) {
-
-          // TODO: use the library to get the light intensity
-          httpHelper->setJSONResponseHeaders(client);
-          int lightIntensity = actionHelper->getLightIntensity();
-          httpHelper->writeBody(client,"{ 'status': 'success' }");
-          httpHelper->endHTTPResponse(client);
-          break;
-
-        }
-
-        if (currentLine.endsWith("GET /action")) {
-
-          // TODO: use the library to get the current action and duration
-          httpHelper->setJSONResponseHeaders(client);
-          ACTION currentAction = actionHelper->getCurrentAction();
-          httpHelper->writeBody(client,"{ 'status': 'success' }");
-          httpHelper->endHTTPResponse(client);
-          break;
-
-        }
-
-        if (currentLine.endsWith("POST /action")) {
-
-          // TODO: use the library to get the current action and duration
-          httpHelper->setJSONResponseHeaders(client);
-          actionHelper->setActionAndDuration(ACTION::READING, 20);
-          httpHelper->writeBody(client,"{ 'status': 'success' }");
-          httpHelper->endHTTPResponse(client);
-          break;
-
-        }
-
+      } else {
+        break;
       }
+    }
 
+
+    if (endpoint.startsWith("GET /intensity")) {
+
+      httpHelper->setJSONResponseHeaders(client);
+      int lightIntensity = actionHelper->getLightIntensity();
+
+      String responseString = "";
+      DynamicJsonDocument responseBody(1024);
+      responseBody["status"] = "success";
+      responseBody["intensity"] = String(lightIntensity);
+      responseBody["unit"] = "lux";
+      serializeJson(responseBody, responseString);
+
+      httpHelper->writeBody(client,responseString);
+      httpHelper->endHTTPResponse(client);
+      
+    } else if (endpoint.startsWith("GET /action")) {
+
+      DynamicJsonDocument requestBody(1024);
+      deserializeJson(requestBody, jsonBody);
+      
+      httpHelper->setJSONResponseHeaders(client);
+      ACTION currentAction = actionHelper->getCurrentAction();
+      String enumString = actionToString(currentAction);
+
+      String responseString = "";
+      DynamicJsonDocument responseBody(1024);
+      responseBody["status"] = "success";
+      responseBody["action"] = enumString;
+      serializeJson(responseBody, responseString);
+      
+      httpHelper->writeBody(client,responseString);
+      httpHelper->endHTTPResponse(client);
+      
+    } else if (endpoint.startsWith("POST /action")) {
+
+      DynamicJsonDocument requestBody(100);
+      deserializeJson(requestBody, jsonBody);
+
+      ACTION action = stringToAction(requestBody["action"]);
+      int durationInMinutes = requestBody["durationInMinutes"];
+      actionHelper->setActionAndDuration(action, durationInMinutes);
+      httpHelper->setJSONResponseHeaders(client);
+
+      String responseString = "";
+      DynamicJsonDocument responseBody(1024);
+      responseBody["status"] = "success";
+      serializeJson(responseBody, responseString);
+      
+      httpHelper->writeBody(client,responseString);
+      httpHelper->endHTTPResponse(client);
+      
+    } else {
+
+      httpHelper->setJSONResponseHeaders(client);
+
+      String responseString = "";
+      DynamicJsonDocument responseBody(1024);
+      responseBody["status"] = "failure";
+      serializeJson(responseBody, responseString);
+      
+      httpHelper->writeBody(client,responseString);
+      httpHelper->endHTTPResponse(client);
+      
     }
 
     // close the connection:
@@ -296,6 +409,14 @@ void HTTPServer::serverLoop() {
   }
 }
 
+
+/********************************************/
+//                                          //
+//          Ardunio Control Loop            //
+//                                          //
+/********************************************/
+
+
 HTTPServer* httpServer = new HTTPServer();
 
 void setup() {
@@ -303,5 +424,6 @@ void setup() {
 }
 
 void loop() {
+  httpServer->actionHelper->checkActionTimeout();
   httpServer->serverLoop();
 }
