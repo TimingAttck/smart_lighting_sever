@@ -1,7 +1,9 @@
 #include <SPI.h>
 #include <WiFiNINA.h>
 #include <ArduinoJson.h>
+#include "optimal_lighting.cpp"
 
+// Author: Ohlhoff Claude
 
 /********************************************/
 //                                          //
@@ -71,7 +73,7 @@ ACTION stringToAction(String action) {
       return ACTION::OFFICE_WORK;
    else if (action == "EATING")
       return ACTION::EATING;
-   else 
+   else
       return ACTION::NONE;
 };
 
@@ -82,23 +84,13 @@ ACTION stringToAction(String action) {
 //                                          //
 /********************************************/
 
-
-// LEDHelper class that wrapps the libray written by Houda and Meryem
-class LEDHelper {
-  public:
-    void setLightIntensity() {
-      // TODO: call the light library libray written by Houda and Meryem
-      return;
-    }
-};
-
+OptimalLighting* optimalLighting = new OptimalLighting();
 
 // SENSORHelper class that wraps the libray written by Houda and Meryem
 class SENSORHelper {
   public:
-    int getLightIntensity() {
-      // TODO: call the light library libray written by Houda and Meryem
-      return 0;
+    uint16_t getLightIntensity() {
+      return optimalLighting->getLightIntensity();
     }
 };
 
@@ -108,48 +100,47 @@ class ACTIONHelper {
 
   private:
     SENSORHelper* sensorHelper;
-    LEDHelper* ledHelper;
     unsigned long previousMillis = 0;
     long timeOut = 0;
 
   public:
-  
+
     ACTION currentAction;
-    
+
     ACTIONHelper() {
       this->currentAction = ACTION::NONE;
       this->sensorHelper = new SENSORHelper();
-      this->ledHelper = new LEDHelper();
     }
 
     void setActionAndDuration(ACTION action, int durationInMinutes) {
 
       this->currentAction = action;
 
-      // TODO: use the optimal lighting to get or set the 
-      // lighting according to the action and the sensor value
+      // Call the optimal lighting library
+      optimalLighting->setAction(actionToString(this->currentAction));
 
       long clampedDurationInMinutes = constrain(durationInMinutes, 1, 1440);
 
       // Set timeout for the action to be reset to NONE
       long timeoutInMillis = clampedDurationInMinutes*60000;
       this->timeOut = timeoutInMillis;
-      
+
     }
-    
+
     void checkActionTimeout() {
 
       unsigned long currentMillis = millis();
-      
+
       // Reset action if timeout has passed
       if (this->timeOut != 0) {
         if (currentMillis - this->previousMillis > this->timeOut) {
-          this->previousMillis = currentMillis;  
+          this->previousMillis = currentMillis;
           this->currentAction = ACTION::NONE;
+          optimalLighting->setAction(actionToString(this->currentAction));
           this->timeOut = 0;
         }
       }
-      
+
     }
 
     ACTION getCurrentAction() {
@@ -203,10 +194,10 @@ WiFiServer server(PORT);
 // on the Arduino and also reading requests sent from the clients
 // and finally responding to those requests
 class HTTPServer {
-  
+
   public:
     ACTIONHelper* actionHelper;
-  
+
   private:
     HTTPHelper* httpHelper;
 
@@ -354,7 +345,7 @@ void HTTPServer::serverLoop() {
        **/
 
       httpHelper->setJSONResponseHeaders(client);
-      int lightIntensity = actionHelper->getLightIntensity();
+      uint16_t lightIntensity = actionHelper->getLightIntensity();
 
       String responseString = "";
       DynamicJsonDocument responseBody(1024);
@@ -365,7 +356,7 @@ void HTTPServer::serverLoop() {
 
       httpHelper->writeBody(client,responseString);
       httpHelper->endHTTPResponse(client);
-      
+
     } else if (endpoint.startsWith("GET /action")) {
 
       /**
@@ -376,7 +367,7 @@ void HTTPServer::serverLoop() {
 
       DynamicJsonDocument requestBody(1024);
       deserializeJson(requestBody, jsonBody);
-      
+
       httpHelper->setJSONResponseHeaders(client);
       ACTION currentAction = actionHelper->getCurrentAction();
       String enumString = actionToString(currentAction);
@@ -386,10 +377,10 @@ void HTTPServer::serverLoop() {
       responseBody["status"] = "success";
       responseBody["action"] = enumString;
       serializeJson(responseBody, responseString);
-      
+
       httpHelper->writeBody(client,responseString);
       httpHelper->endHTTPResponse(client);
-      
+
     } else if (endpoint.startsWith("POST /action")) {
 
       /**
@@ -410,10 +401,10 @@ void HTTPServer::serverLoop() {
       DynamicJsonDocument responseBody(1024);
       responseBody["status"] = "success";
       serializeJson(responseBody, responseString);
-      
+
       httpHelper->writeBody(client,responseString);
       httpHelper->endHTTPResponse(client);
-      
+
     } else {
 
       /**
@@ -428,10 +419,10 @@ void HTTPServer::serverLoop() {
       DynamicJsonDocument responseBody(1024);
       responseBody["status"] = "failure";
       serializeJson(responseBody, responseString);
-      
+
       httpHelper->writeBody(client,responseString);
       httpHelper->endHTTPResponse(client);
-      
+
     }
 
     // close the connection:
@@ -453,9 +444,11 @@ HTTPServer* httpServer = new HTTPServer();
 
 void setup() {
   httpServer->setUp();
+  optimalLighting->setUp();
 }
 
 void loop() {
   httpServer->actionHelper->checkActionTimeout();
   httpServer->serverLoop();
+  optimalLighting->loop();
 }
