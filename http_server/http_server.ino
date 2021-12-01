@@ -114,16 +114,19 @@ class ACTIONHelper {
 
     void setActionAndDuration(ACTION action, int durationInMinutes) {
 
+      this->currentAction = ACTION::NONE;
       this->currentAction = action;
-
-      // Call the optimal lighting library
-      optimalLighting->setAction(actionToString(this->currentAction));
-
       long clampedDurationInMinutes = constrain(durationInMinutes, 1, 1440);
 
+      this->timeOut = 0;
+      this->previousMillis = millis();
+      
       // Set timeout for the action to be reset to NONE
       long timeoutInMillis = clampedDurationInMinutes*60000;
       this->timeOut = timeoutInMillis;
+
+      // Call the optimal lighting library
+      optimalLighting->setAction(actionToString(this->currentAction));
 
     }
 
@@ -149,6 +152,13 @@ class ACTIONHelper {
 
     int getLightIntensity() {
       return sensorHelper->getLightIntensity();
+    }
+
+    unsigned long getRemainingDuration() {
+      unsigned long currentMillis = millis();
+      if (this->timeOut == 0)
+        return 0;
+      return this->timeOut - (currentMillis - this->previousMillis);
     }
 
 };
@@ -350,7 +360,7 @@ void HTTPServer::serverLoop() {
       String responseString = "";
       DynamicJsonDocument responseBody(1024);
       responseBody["status"] = "success";
-      responseBody["intensity"] = String(lightIntensity);
+      responseBody["intensity"] = lightIntensity;
       responseBody["unit"] = "lux";
       serializeJson(responseBody, responseString);
 
@@ -370,12 +380,14 @@ void HTTPServer::serverLoop() {
 
       httpHelper->setJSONResponseHeaders(client);
       ACTION currentAction = actionHelper->getCurrentAction();
+      unsigned long durationLeft = actionHelper->getRemainingDuration();
       String enumString = actionToString(currentAction);
 
       String responseString = "";
       DynamicJsonDocument responseBody(1024);
       responseBody["status"] = "success";
       responseBody["action"] = enumString;
+      responseBody["durationLeftInMinutes"] = durationLeft/60000.0;
       serializeJson(responseBody, responseString);
 
       httpHelper->writeBody(client,responseString);
